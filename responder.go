@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
+	"strings"
+	"unicode"
 )
 
 // M is a convenience alias for quickly building a map structure that is going
@@ -88,13 +91,75 @@ func HTML(w http.ResponseWriter, r *http.Request, v string) {
 	w.Write([]byte(v)) //nolint:errcheck
 }
 
+// MarshalJSON marshals the given interface to JSON
+func MarshalJSON(v interface{}, ext interface{}) (bytes []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic %v", r)
+		}
+	}()
+
+	Case2Camel := func(name string) string {
+		name = strings.ReplaceAll(name, "_", " ")
+		name = strings.Title(name)
+
+		return strings.ReplaceAll(name, " ", "")
+	}
+
+	UpperCamelCase := func(str string) string {
+		for i, v := range str {
+			return string(unicode.ToUpper(v)) + str[i+1:]
+		}
+
+		return ""
+	}
+
+	newData := v
+	if ext != nil {
+		valueItems := reflect.ValueOf(v).Elem()
+		extItems := reflect.ValueOf(ext).Elem()
+		mapVal := make(map[string]interface{}, valueItems.NumField()+extItems.NumField())
+		for i := 0; i < valueItems.NumField(); i++ {
+			if valueItems.Field(i).CanInterface() {
+				mapVal[valueItems.Type().Field(i).Name] = valueItems.Field(i).Interface()
+			}
+		}
+		for i := 0; i < extItems.NumField(); i++ {
+			if extItems.Field(i).CanInterface() {
+				mapVal[extItems.Type().Field(i).Name] = extItems.Field(i).Interface()
+			}
+		}
+		newData = mapVal
+	}
+	var keyMatchRegex = regexp.MustCompile(`\"(\w+)\":`)
+	marshalled, err := json.Marshal(newData)
+	if err != nil {
+		return nil, fmt.Errorf("MarshalJSON failed. %w", err)
+	}
+	converted := keyMatchRegex.ReplaceAllFunc(
+		marshalled,
+		func(match []byte) []byte {
+			matchStr := string(match)
+			key := matchStr[1 : len(matchStr)-2]
+			resKey := UpperCamelCase(Case2Camel(key))
+
+			return []byte(`"` + resKey + `":`)
+		},
+	)
+
+	return converted, nil
+}
+
 // JSON marshals 'v' to JSON, automatically escaping HTML and setting the
 // Content-Type as application/json.
 func JSON(w http.ResponseWriter, r *http.Request, v interface{}) {
-	buf := &bytes.Buffer{}
-	enc := json.NewEncoder(buf)
-	enc.SetEscapeHTML(true)
-	if err := enc.Encode(v); err != nil {
+	requestId := r.Header.Get("X-Request-Id")
+
+	buf, err := MarshalJSON(v, &struct {
+		RequestId string
+	}{requestId})
+
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -103,7 +168,7 @@ func JSON(w http.ResponseWriter, r *http.Request, v interface{}) {
 	if status, ok := r.Context().Value(StatusCtxKey).(int); ok {
 		w.WriteHeader(status)
 	}
-	w.Write(buf.Bytes()) //nolint:errcheck
+	w.Write(buf) //nolint:errcheck
 }
 
 // XML marshals 'v' to JSON, setting the Content-Type as application/xml. It
