@@ -160,6 +160,7 @@ func JSON(w http.ResponseWriter, r *http.Request, v interface{}) {
 			RequestId string
 		}{requestId})
 	*/
+	// could be add https://github.com/go-chi/render/pull/33/files#diff-d423371206870c274f93e6da9c6976865b7238016127fdbbf4cbeae0a60090fc
 
 	buf := &bytes.Buffer{}
 	enc := jsonMarshaller.NewEncoder(buf)
