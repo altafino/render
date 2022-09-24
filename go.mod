@@ -1,6 +1,6 @@
-module github.com/cinience/render
+module github.com/altafino/render
 
-go 1.16
+go 1.18
 
 require github.com/ajg/form v1.5.1
 
