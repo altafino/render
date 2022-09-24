@@ -153,13 +153,18 @@ func MarshalJSON(v interface{}, ext interface{}) (bytes []byte, err error) {
 // JSON marshals 'v' to JSON, automatically escaping HTML and setting the
 // Content-Type as application/json.
 func JSON(w http.ResponseWriter, r *http.Request, v interface{}) {
-	requestId := r.Header.Get("X-Request-Id")
+	/*
+		requestId := r.Header.Get("X-Request-Id")
 
-	buf, err := MarshalJSON(v, &struct {
-		RequestId string
-	}{requestId})
+		buf, err := MarshalJSON(v, &struct {
+			RequestId string
+		}{requestId})
+	*/
 
-	if err != nil {
+	buf := &bytes.Buffer{}
+	enc := jsonMarshaller.NewEncoder(buf)
+	enc.SetEscapeHTML(true)
+	if err := enc.Encode(v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -168,7 +173,7 @@ func JSON(w http.ResponseWriter, r *http.Request, v interface{}) {
 	if status, ok := r.Context().Value(StatusCtxKey).(int); ok {
 		w.WriteHeader(status)
 	}
-	w.Write(buf) //nolint:errcheck
+	w.Write(buf.Bytes()) //nolint:errcheck
 }
 
 // XML marshals 'v' to JSON, setting the Content-Type as application/xml. It
@@ -247,7 +252,7 @@ func channelEventStream(w http.ResponseWriter, r *http.Request, v interface{}) {
 				}
 			}
 
-			bytes, err := json.Marshal(v)
+			bytes, err := jsonMarshaller.Marshal(v)
 			if err != nil {
 				w.Write([]byte(fmt.Sprintf("event: error\ndata: {\"error\":\"%v\"}\n\n", err))) //nolint:errcheck
 				if f, ok := w.(http.Flusher); ok {

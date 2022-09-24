@@ -1,7 +1,6 @@
 package render
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -41,7 +40,7 @@ func DefaultDecoder(r *http.Request, v interface{}) error {
 // DecodeJSON decodes a given reader into an interface using the json decoder.
 func DecodeJSON(r io.Reader, v interface{}) error {
 	defer io.Copy(ioutil.Discard, r) //nolint:errcheck
-	return json.NewDecoder(r).Decode(v)
+	return jsonMarshaller.Decode(r, v)
 }
 
 // DecodeXML decodes a given reader into an interface using the xml decoder.
